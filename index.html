@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>レジ精算タイムアタック</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f0f4f8; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .timer { font-size: 2em; color: #e74c3c; font-weight: bold; }
+        .target { font-size: 1.5em; background: #34495e; color: white; padding: 10px; border-radius: 5px; }
+        .cash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+        .cash-item { border: 1px solid #ddd; padding: 10px; border-radius: 5px; }
+        input { width: 60px; font-size: 1.1em; text-align: center; }
+        .result-area { margin-top: 20px; font-weight: bold; font-size: 1.2em; }
+        .success { color: #27ae60; }
+        .error { color: #c0392b; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>レジ精算タイムアタック</h1>
+    <p class="target">目標金額: <strong>91,650円</strong> を出せ！</p>
+    <div class="timer" id="timer">残り時間: 30.0秒</div>
+    
+    <div class="cash-grid" id="cashGrid">
+        </div>
+
+    <div class="result-area">
+        現在の合計: <span id="currentTotal">0</span> 円
+        <p id="message"></p>
+    </div>
+    
+    <button onclick="startGame()" style="padding: 10px 20px; font-size: 1em;">リセットして開始</button>
+</div>
+
+<script>
+const target = 91650;
+let timeLeft = 30.0;
+let timerId = null;
+const denominations = [10000, 5000, 1000, 500, 100, 50, 10, 5, 1];
+let stock = {};
+
+function startGame() {
+    clearInterval(timerId);
+    timeLeft = 30.0;
+    document.getElementById('message').innerText = "";
+    document.getElementById('currentTotal').innerText = "0";
+    
+    // レジ内の在庫をランダムに設定
+    const grid = document.getElementById('cashGrid');
+    grid.innerHTML = "";
+    denominations.forEach(d => {
+        stock[d] = Math.floor(Math.random() * 20) + 5; // 各5〜25枚
+        const div = document.createElement('div');
+        div.className = 'cash-item';
+        div.innerHTML = `
+            <label>${d.toLocaleString()}円 (在庫:${stock[d]}枚)</label><br>
+            <input type="number" id="input-${d}" value="0" min="0" max="${stock[d]}" oninput="updateTotal()">
+        `;
+        grid.appendChild(div);
+    });
+
+    timerId = setInterval(() => {
+        timeLeft -= 0.1;
+        document.getElementById('timer').innerText = `残り時間: ${timeLeft.toFixed(1)}秒`;
+        if (timeLeft <= 0) endGame(false);
+    }, 100);
+}
+
+function updateTotal() {
+    let total = 0;
+    denominations.forEach(d => {
+        const val = parseInt(document.getElementById(`input-${d}`).value) || 0;
+        total += d * val;
+    });
+    document.getElementById('currentTotal').innerText = total.toLocaleString();
+    
+    if (total === target) {
+        endGame(true);
+    }
+}
+
+function endGame(isSuccess) {
+    clearInterval(timerId);
+    const msg = document.getElementById('message');
+    if (isSuccess) {
+        msg.innerHTML = `<span class="success">クリア！残り時間 ${timeLeft.toFixed(1)}秒で精算完了！</span>`;
+    } else {
+        msg.innerHTML = `<span class="error">タイムアップ！精算失敗です。</span>`;
+    }
+}
+
+// 初回起動
+startGame();
+</script>
+</body>
+</html>
