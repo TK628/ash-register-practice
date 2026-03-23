@@ -2,97 +2,162 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>レジ精算タイムアタック</title>
+    <title>レジ精算トレーニング（在庫制限あり）</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f0f4f8; }
-        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .timer { font-size: 2em; color: #e74c3c; font-weight: bold; }
-        .target { font-size: 1.5em; background: #34495e; color: white; padding: 10px; border-radius: 5px; }
-        .cash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
-        .cash-item { border: 1px solid #ddd; padding: 10px; border-radius: 5px; }
-        input { width: 60px; font-size: 1.1em; text-align: center; }
-        .result-area { margin-top: 20px; font-weight: bold; font-size: 1.2em; }
-        .success { color: #27ae60; }
-        .error { color: #c0392b; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; text-align: center; background: #f4f7f6; margin: 0; padding: 20px; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .timer-display { font-size: 2.8em; color: #2c3e50; font-family: monospace; margin: 10px 0; background: #eee; border-radius: 8px; }
+        .best-time { color: #f39c12; font-weight: bold; margin-bottom: 10px; font-size: 1.1em; }
+        .target-box { background: #2980b9; color: white; padding: 15px; border-radius: 8px; font-size: 1.5em; margin-bottom: 20px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
+        .cash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .cash-item { background: #fff; padding: 10px; border-radius: 8px; border: 2px solid #dfe6e9; transition: 0.2s; }
+        .cash-item.out { background: #ffeaa7; border-color: #fdcb6e; }
+        .cash-item label { display: block; font-size: 0.9em; font-weight: bold; color: #2d3436; margin-bottom: 5px; }
+        .stock-info { font-size: 0.8em; color: #636e72; margin-bottom: 5px; }
+        input[type="number"] { width: 70%; font-size: 1.2em; border: 1px solid #ccc; border-radius: 4px; text-align: center; padding: 5px; }
+        input:focus { outline: none; border-color: #2980b9; box-shadow: 0 0 5px rgba(41,128,185,0.3); }
+        .status-area { margin-top: 20px; padding: 15px; border-top: 2px solid #eee; }
+        .current-sum { font-size: 1.8em; font-weight: bold; color: #2c3e50; }
+        button { background: #27ae60; color: white; border: none; padding: 15px 40px; border-radius: 30px; font-size: 1.1em; cursor: pointer; transition: 0.3s; margin-top: 15px; font-weight: bold; width: 100%; }
+        button:hover { background: #219150; transform: translateY(-2px); }
+        .error-msg { color: #d63031; font-size: 0.8em; height: 1em; margin-top: 3px; }
+        .success-animation { color: #27ae60; font-size: 1.3em; margin-top: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>レジ精算タイムアタック</h1>
-    <p class="target">目標金額: <strong>91,650円</strong> を出せ！</p>
-    <div class="timer" id="timer">残り時間: 30.0秒</div>
+    <h1>レジ精算実戦練習</h1>
     
+    <div class="best-time" id="bestTimeDisplay">自己ベスト: --秒</div>
+    <div class="timer-display" id="timer">0.00</div>
+    
+    <div class="target-box">
+        出す金額: <strong>91,650円</strong>
+    </div>
+
     <div class="cash-grid" id="cashGrid">
         </div>
 
-    <div class="result-area">
-        現在の合計: <span id="currentTotal">0</span> 円
-        <p id="message"></p>
+    <div class="status-area">
+        <div>現在の合計</div>
+        <div class="current-sum"><span id="currentTotal">0</span> 円</div>
+        <div id="resultMessage"></div>
+        <button onclick="initGame()">リセットして開始</button>
     </div>
-    
-    <button onclick="startGame()" style="padding: 10px 20px; font-size: 1em;">リセットして開始</button>
 </div>
 
 <script>
-const target = 91650;
-let timeLeft = 30.0;
-let timerId = null;
+const targetAmount = 91650;
 const denominations = [10000, 5000, 1000, 500, 100, 50, 10, 5, 1];
-let stock = {};
+let stocks = {};
+let startTime;
+let timerId;
+let isRunning = false;
 
-function startGame() {
-    clearInterval(timerId);
-    timeLeft = 30.0;
-    document.getElementById('message').innerText = "";
+function initGame() {
+    isRunning = true;
+    startTime = Date.now();
+    document.getElementById('resultMessage').innerHTML = "";
     document.getElementById('currentTotal').innerText = "0";
     
-    // レジ内の在庫をランダムに設定
+    // 1. 各金種の在庫をランダムに設定（Python版のロジックを反映）
+    stocks = {
+        10000: Math.floor(Math.random() * 11) + 5, // 5-15枚
+        5000:  Math.floor(Math.random() * 9) + 2,  // 2-10枚
+        1000:  Math.floor(Math.random() * 21) + 10, // 10-30枚
+        500:   Math.floor(Math.random() * 16) + 5,  // 5-20枚
+        100:   Math.floor(Math.random() * 41) + 10, // 10-50枚
+        50:    Math.floor(Math.random() * 16) + 5,  // 5-20枚
+        10:    Math.floor(Math.random() * 41) + 10, // 10-50枚
+        5:     Math.floor(Math.random() * 16) + 5,  // 5-20枚
+        1:     Math.floor(Math.random() * 41) + 10  // 10-50枚
+    };
+
     const grid = document.getElementById('cashGrid');
     grid.innerHTML = "";
+    
     denominations.forEach(d => {
-        stock[d] = Math.floor(Math.random() * 20) + 5; // 各5〜25枚
         const div = document.createElement('div');
         div.className = 'cash-item';
+        div.id = `item-${d}`;
         div.innerHTML = `
-            <label>${d.toLocaleString()}円 (在庫:${stock[d]}枚)</label><br>
-            <input type="number" id="input-${d}" value="0" min="0" max="${stock[d]}" oninput="updateTotal()">
+            <label>${d.toLocaleString()}円</label>
+            <div class="stock-info">在庫: ${stocks[d]}枚</div>
+            <input type="number" id="input-${d}" value="" placeholder="0" oninput="checkAmount(${d})">
+            <div class="error-msg" id="error-${d}"></div>
         `;
         grid.appendChild(div);
     });
 
-    timerId = setInterval(() => {
-        timeLeft -= 0.1;
-        document.getElementById('timer').innerText = `残り時間: ${timeLeft.toFixed(1)}秒`;
-        if (timeLeft <= 0) endGame(false);
-    }, 100);
-}
-
-function updateTotal() {
-    let total = 0;
-    denominations.forEach(d => {
-        const val = parseInt(document.getElementById(`input-${d}`).value) || 0;
-        total += d * val;
-    });
-    document.getElementById('currentTotal').innerText = total.toLocaleString();
-    
-    if (total === target) {
-        endGame(true);
-    }
-}
-
-function endGame(isSuccess) {
+    // 2. タイマー開始
     clearInterval(timerId);
-    const msg = document.getElementById('message');
-    if (isSuccess) {
-        msg.innerHTML = `<span class="success">クリア！残り時間 ${timeLeft.toFixed(1)}秒で精算完了！</span>`;
+    timerId = setInterval(() => {
+        const diff = (Date.now() - startTime) / 1000;
+        document.getElementById('timer').innerText = diff.toFixed(2);
+    }, 10);
+    
+    displayBestTime();
+}
+
+function checkAmount(d) {
+    if (!isRunning) return;
+
+    const inputEl = document.getElementById(`input-${d}`);
+    const errorEl = document.getElementById(`error-${d}`);
+    const val = parseInt(inputEl.value) || 0;
+
+    // 在庫チェック
+    if (val > stocks[d]) {
+        errorEl.innerText = "在庫不足！";
+        document.getElementById(`item-${d}`).classList.add('out');
     } else {
-        msg.innerHTML = `<span class="error">タイムアップ！精算失敗です。</span>`;
+        errorEl.innerText = "";
+        document.getElementById(`item-${d}`).classList.remove('out');
     }
+
+    // 合計計算
+    let total = 0;
+    let hasError = false;
+    denominations.forEach(deno => {
+        const v = parseInt(document.getElementById(`input-${deno}`).value) || 0;
+        if (v > stocks[deno]) hasError = true;
+        total += deno * v;
+    });
+
+    document.getElementById('currentTotal').innerText = total.toLocaleString();
+
+    // 判定（在庫エラーがなく、金額がぴったりの場合）
+    if (total === targetAmount && !hasError) {
+        completeGame();
+    }
+}
+
+function completeGame() {
+    isRunning = false;
+    clearInterval(timerId);
+    const finishTime = document.getElementById('timer').innerText;
+    
+    const lastBest = localStorage.getItem('bestTime_v2');
+    let message = `<div class="success-animation">✨ Clear! ${finishTime}秒</div>`;
+    
+    if (!lastBest || parseFloat(finishTime) < parseFloat(lastBest)) {
+        localStorage.setItem('bestTime_v2', finishTime);
+        message += `<div style="color:#f39c12">🏆 自己ベスト更新！</div>`;
+        displayBestTime();
+    }
+    document.getElementById('resultMessage').innerHTML = message;
+}
+
+function displayBestTime() {
+    const best = localStorage.getItem('bestTime_v2');
+    document.getElementById('bestTimeDisplay').innerText = best ? `自己ベスト: ${best}秒` : "自己ベスト: --";
 }
 
 // 初回起動
-startGame();
+window.onload = displayBestTime;
 </script>
+
 </body>
 </html>
